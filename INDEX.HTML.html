@@ -1,0 +1,1221 @@
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, doc, setDoc, getDoc, collection, addDoc, getDocs, deleteDoc, query, where, onSnapshot, Timestamp, serverTimestamp } from 'firebase/firestore';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
+import { Sparkles, Settings, Info, Gamepad2, FileText, Keyboard, Gauge, LayoutDashboard, Moon, Sun, Trash2, Download, Play, Edit3, Save, XCircle, CheckCircle, Menu, X, Target, Zap, Brain } from 'lucide-react'; // Added Brain for analysis
+
+// --- Firebase Configuration ---
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+    apiKey: "YOUR_FALLBACK_API_KEY", 
+    authDomain: "YOUR_FALLBACK_AUTHDOMAIN",
+    projectId: "YOUR_FALLBACK_PROJECTID",
+    storageBucket: "YOUR_FALLBACK_STORAGEBUCKET",
+    messagingSenderId: "YOUR_FALLBACK_MESSAGINGSENDERID",
+    appId: "YOUR_FALLBACK_APPID"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-shadow-type-studio';
+
+// --- Helper Functions ---
+const generateRandomWords = (count, difficulty) => {
+    const easyWords = ["the", "be", "to", "of", "and", "a", "in", "that", "have", "I", "it", "for", "not", "on", "with", "he", "as", "you", "do", "at", "this", "but", "his", "by", "from", "they", "we", "say", "her", "she", "or", "an", "will", "my", "one", "all", "would", "there", "their", "what", "so", "up", "out", "if", "about", "who", "get", "which", "go", "me", "when", "make", "can", "like", "time", "no", "just", "him", "know", "take", "people", "into", "year", "your", "good", "some", "could", "them", "see", "other", "than", "then", "now", "look", "only", "come", "its", "over", "think", "also", "back", "after", "use", "two", "how", "our", "work", "first", "well", "way", "even", "new", "want", "because", "any", "these", "give", "day", "most", "us"];
+    const mediumWords = ["apple", "banana", "orange", "grape", "kiwi", "lemon", "melon", "peach", "pear", "plum", "happy", "sad", "angry", "excited", "bored", "tired", "sleepy", "hungry", "thirsty", "play", "game", "read", "write", "draw", "sing", "dance", "jump", "run", "walk", "talk", "listen", "watch", "learn", "study", "teach", "help", "share", "care", "love", "friend", "family", "home", "school", "work", "city", "town", "country", "world", "earth", "sun", "moon", "star", "sky", "cloud", "rain", "snow", "wind", "fire", "water", "air", "tree", "flower", "grass", "animal", "bird", "fish", "insect", "dog", "cat", "cow", "horse", "pig", "sheep", "lion", "tiger", "bear", "wolf", "fox", "deer", "book", "pen", "paper", "desk", "chair", "table", "lamp", "door", "window", "wall", "roof", "floor", "room", "house", "car", "bus", "train", "plane", "boat", "ship", "bike", "road", "street", "bridge", "park", "shop", "store", "market", "money", "food", "drink", "music", "movie", "sport", "art", "color", "shape", "size", "number", "letter", "word", "story", "dream", "idea", "plan", "goal", "hope", "wish", "life", "death", "past", "future", "today", "tomorrow", "yesterday"];
+    const hardWords = ["programming", "javascript", "algorithm", "database", "framework", "interface", "developer", "software", "hardware", "network", "security", "encryption", "authentication", "authorization", "virtualization", "containerization", "microservices", "architecture", "scalability", "performance", "optimization", "debugging", "testing", "deployment", "integration", "repository", "version", "control", "collaboration", "communication", "documentation", "innovation", "creativity", "problem-solving", "analytical", "thinking", "artificial", "intelligence", "machine", "learning", "deep", "neural", "network", "big", "data", "analytics", "visualization", "cloud", "computing", "serverless", "blockchain", "cryptocurrency", "cybersecurity", "internet", "things", "robotics", "automation", "nanotechnology", "biotechnology", "genetics", "pharmaceutical", "environmental", "sustainability", "renewable", "energy", "climate", "change", "globalization", "economics", "finance", "investment", "entrepreneurship", "marketing", "management", "leadership", "strategy", "philosophy", "psychology", "sociology", "anthropology", "archaeology", "linguistics", "literature", "meticulous", "ubiquitous", "ephemeral", "serendipity", "onomatopoeia", "juxtaposition", "idiosyncratic", "quintessential", "magnanimous", "pulchritudinous"];
+    
+    let wordPool;
+    if (difficulty === 'easy') wordPool = easyWords;
+    else if (difficulty === 'medium') wordPool = mediumWords;
+    else wordPool = hardWords;
+
+    let words = [];
+    for (let i = 0; i < count; i++) {
+        words.push(wordPool[Math.floor(Math.random() * wordPool.length)]);
+    }
+    return words.join(' ');
+};
+
+const keyLayout = [
+    ['`', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', 'Backspace'],
+    ['Tab', 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\\'],
+    ['CapsLock', 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', "'", 'Enter'],
+    ['ShiftLeft', 'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/', 'ShiftRight'],
+    ['ControlLeft', 'MetaLeft', 'AltLeft', 'Space', 'AltRight', 'ContextMenu', 'ControlRight']
+];
+
+
+// --- Components ---
+
+const WelcomeScreen = ({ onGetStarted }) => {
+    return (
+        <div className="h-screen w-screen flex flex-col items-center justify-center bg-cover bg-center p-4" style={{ backgroundImage: "url('https://ik.imagekit.io/6ilngyaqa/1747927800558-a-digital-illustration-showcasing-the-lo_QzdKAR37R9WANOH5ns4wpQ_Wg99Dv44TyWYf1oSmSEe1Q_bOfFJzmnq.jpeg?updatedAt=1716460898003')" }}>
+            <div className="bg-black bg-opacity-50 p-8 rounded-xl shadow-2xl text-center">
+                <h1 className="text-5xl md:text-7xl font-bold text-white mb-4" style={{ textShadow: '0 0 10px #00ffff, 0 0 20px #00ffff, 0 0 30px #00ffff, 0 0 40px #00ffff' }}>
+                    Shadow Type Studio
+                </h1>
+                <p className="text-xl text-gray-200 mb-8">Test your typing speed, CPS, and more!</p>
+                <button
+                    onClick={onGetStarted}
+                    className="bg-cyan-500 hover:bg-cyan-400 text-white font-bold py-3 px-8 rounded-lg text-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
+                >
+                    Get Started
+                </button>
+            </div>
+        </div>
+    );
+};
+
+const Modal = ({ isOpen, onClose, title, children, theme, size = "md" }) => { 
+    const [showContent, setShowContent] = useState(false);
+
+    useEffect(() => {
+        if (isOpen) {
+            const timer = setTimeout(() => setShowContent(true), 50); 
+            return () => clearTimeout(timer);
+        } else {
+            setShowContent(false);
+        }
+    }, [isOpen]);
+
+    const [actuallyRenderModal, setActuallyRenderModal] = useState(isOpen);
+    useEffect(() => {
+        if (isOpen) {
+            setActuallyRenderModal(true);
+        } else {
+            const timer = setTimeout(() => {
+                setActuallyRenderModal(false);
+            }, 300); 
+            return () => clearTimeout(timer);
+        }
+    }, [isOpen]);
+
+    if (!actuallyRenderModal) return null;
+
+    const sizeClasses = {
+        sm: "max-w-sm", md: "max-w-md", lg: "max-w-lg", xl: "max-w-xl", "2xl": "max-w-2xl",
+        full: "max-w-full h-full", 
+    };
+
+    return (
+        <div
+            className={`fixed inset-0 bg-black flex items-center justify-center z-50 p-4 transition-opacity duration-300 ease-in-out
+                         ${isOpen ? 'bg-opacity-75 opacity-100' : 'bg-opacity-0 opacity-0 pointer-events-none'}`}
+            onClick={size !== 'full' ? onClose : undefined} 
+        >
+            <div
+                className={`transform transition-all duration-300 ease-in-out
+                            ${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white text-black'}
+                            ${size === 'full' ? 'w-full h-full rounded-none' : 'rounded-lg shadow-xl'}
+                            p-6 ${sizeClasses[size]}
+                            ${isOpen && showContent ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`}
+                onClick={(e) => e.stopPropagation()} 
+            >
+                <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-2xl font-semibold">{title}</h2>
+                    <button onClick={onClose} className={`${theme === 'dark' ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-black'}`}>
+                        <XCircle size={24} />
+                    </button>
+                </div>
+                {children}
+            </div>
+        </div>
+    );
+};
+
+
+const App = () => {
+    const [userId, setUserId] = useState(null);
+    const [isAuthReady, setIsAuthReady] = useState(false);
+    const [showWelcome, setShowWelcome] = useState(true);
+    const [currentPage, setCurrentPage] = useState('dashboard');
+    const [theme, setTheme] = useState('dark'); 
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [contentOpacity, setContentOpacity] = useState(0);
+
+    // Game Modal State
+    const [activeGame, setActiveGame] = useState(null); 
+    const [showGameModal, setShowGameModal] = useState(false);
+
+    // Gemini API Analysis Modal State
+    const [showAnalysisModal, setShowAnalysisModal] = useState(false);
+    const [analysisText, setAnalysisText] = useState("");
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [analysisError, setAnalysisError] = useState("");
+
+
+    // Typing Test State
+    const [typingTimeLimit, setTypingTimeLimit] = useState(1); 
+    const [typingDifficulty, setTypingDifficulty] = useState('medium');
+    const [typingText, setTypingText] = useState('');
+    const [currentTypingInput, setCurrentTypingInput] = useState('');
+    const [typingTimer, setTypingTimer] = useState(0);
+    const [isTypingActive, setIsTypingActive] = useState(false);
+    const [typingResult, setTypingResult] = useState(null);
+    const [showTypingModal, setShowTypingModal] = useState(false);
+    const [customText, setCustomText] = useState('');
+    const [useCustomText, setUseCustomText] = useState(false);
+    const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false); // For Gemini prompt generation
+
+    // CPS Test State
+    const [cpsTimeLimit, setCpsTimeLimit] = useState(10); 
+    const [cpsClicks, setCpsClicks] = useState(0);
+    const [isCpsActive, setIsCpsActive] = useState(false);
+    const [cpsTimer, setCpsTimer] = useState(0);
+    const [cpsResult, setCpsResult] = useState(null);
+    const [cpsTestType, setCpsTestType] = useState('mouse'); 
+    const [showCpsModal, setShowCpsModal] = useState(false);
+
+    // Keybind Test State
+    const [pressedKeys, setPressedKeys] = useState({});
+
+    // Reports State
+    const [typingReports, setTypingReports] = useState([]);
+    const [cpsReports, setCpsReports] = useState([]);
+
+    // Game Creator State
+    const [showGameCreatorPopup, setShowGameCreatorPopup] = useState(true); 
+    const [actualGameCreatorMode, setActualGameCreatorMode] = useState(null); 
+    const [userGameCode, setUserGameCode] = useState({ html: '', css: '', js: '' });
+
+    // Firestore initialization and Auth
+    useEffect(() => {
+        const initFirebase = async () => {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Firebase Auth Error:", error);
+                if (auth.currentUser === null) {
+                    try { await signInAnonymously(auth); } 
+                    catch (anonError) { console.error("Firebase Anonymous Auth Error:", anonError); }
+                }
+            }
+        };
+        initFirebase();
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+            if (user) setUserId(user.uid); else setUserId(null); 
+            setIsAuthReady(true);
+        });
+        return () => unsubscribe();
+    }, []);
+
+    // Load theme from Firestore
+    useEffect(() => {
+        if (!isAuthReady || !userId) return;
+        const loadTheme = async () => {
+            const themeDocRef = doc(db, `artifacts/${appId}/users/${userId}/settings/appTheme`);
+            try {
+                const docSnap = await getDoc(themeDocRef);
+                if (docSnap.exists() && docSnap.data().theme) setTheme(docSnap.data().theme);
+            } catch (error) { console.error("Error loading theme:", error); }
+        };
+        loadTheme();
+    }, [isAuthReady, userId]);
+
+    // Apply theme to body & handle initial page fade-in
+    useEffect(() => {
+        document.body.className = theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-black';
+        if (!showWelcome && isAuthReady) {
+            const timer = setTimeout(() => setContentOpacity(1), 50); 
+            return () => clearTimeout(timer);
+        } else if (showWelcome) {
+            setContentOpacity(0); 
+        }
+    }, [theme, showWelcome, isAuthReady]);
+
+    // Load reports from Firestore
+    useEffect(() => {
+        if (!isAuthReady || !userId) return;
+        const typingReportsCol = collection(db, `artifacts/${appId}/users/${userId}/typingReports`);
+        const qTyping = query(typingReportsCol); 
+        const unsubscribeTyping = onSnapshot(qTyping, (snapshot) => {
+            setTypingReports(snapshot.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => b.timestamp?.seconds - a.timestamp?.seconds));
+        }, (error) => console.error("Error fetching typing reports:", error));
+        const cpsReportsCol = collection(db, `artifacts/${appId}/users/${userId}/cpsReports`);
+        const qCps = query(cpsReportsCol); 
+        const unsubscribeCps = onSnapshot(qCps, (snapshot) => {
+            setCpsReports(snapshot.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => b.timestamp?.seconds - a.timestamp?.seconds));
+        }, (error) => console.error("Error fetching CPS reports:", error));
+        return () => { unsubscribeTyping(); unsubscribeCps(); };
+    }, [isAuthReady, userId]);
+
+    const handleGetStarted = () => { setContentOpacity(0); setShowWelcome(false); };
+    
+    const navigate = (page) => {
+        if (page === currentPage && contentOpacity === 1) return; 
+        setContentOpacity(0); 
+        setTimeout(() => {
+            setCurrentPage(page);
+            setIsSidebarOpen(false);
+            setTimeout(() => setContentOpacity(1), 50); 
+        }, 300); 
+    };
+
+    const toggleTheme = async () => {
+        const newTheme = theme === 'dark' ? 'light' : 'dark';
+        setTheme(newTheme);
+        if (isAuthReady && userId) {
+            try { await setDoc(doc(db, `artifacts/${appId}/users/${userId}/settings/appTheme`), { theme: newTheme }); } 
+            catch (error) { console.error("Error saving theme:", error); }
+        }
+    };
+    
+    const startTypingTest = () => {
+        const textToUse = useCustomText && customText.trim() !== '' ? customText : generateRandomWords(150, typingDifficulty);
+        setTypingText(textToUse); setCurrentTypingInput(''); setTypingResult(null);
+        setTypingTimer(typingTimeLimit * 60); setIsTypingActive(true); setShowTypingModal(true);
+    };
+
+    const calculateTypingResult = useCallback(async () => { 
+        const wordsTyped = currentTypingInput.trim().split(/\s+/).filter(Boolean);
+        const originalWords = typingText.trim().split(/\s+/);
+        let correctWords = 0;
+        wordsTyped.forEach((word, index) => { if (originalWords[index] === word) correctWords++; });
+        const timeElapsedSeconds = (typingTimeLimit * 60) - typingTimer;
+        const timeTakenMinutes = timeElapsedSeconds > 0 ? timeElapsedSeconds / 60 : typingTimeLimit;
+        const wpm = timeTakenMinutes > 0 ? Math.round(correctWords / timeTakenMinutes) : 0;
+        const accuracy = wordsTyped.length > 0 ? Math.round((correctWords / wordsTyped.length) * 100) : 0; 
+        const resultData = { wpm, accuracy, correctWords, typedWords: wordsTyped.length, totalWordsInPrompt: originalWords.length, timeLimit: typingTimeLimit, difficulty: useCustomText ? 'custom' : typingDifficulty, timestamp: serverTimestamp() };
+        setTypingResult(resultData);
+        if (isAuthReady && userId) {
+            try { await addDoc(collection(db, `artifacts/${appId}/users/${userId}/typingReports`), resultData); } 
+            catch (error) { console.error("Error saving typing report:", error); }
+        }
+    }, [currentTypingInput, typingText, typingTimeLimit, typingTimer, useCustomText, typingDifficulty, isAuthReady, userId, appId]);
+
+    useEffect(() => {
+        let interval;
+        if (isTypingActive && typingTimer > 0) {
+            interval = setInterval(() => setTypingTimer(prev => prev - 1), 1000);
+        } else if (isTypingActive && typingTimer === 0) {
+            setIsTypingActive(false); calculateTypingResult();
+        }
+        return () => clearInterval(interval);
+    }, [isTypingActive, typingTimer, calculateTypingResult]); 
+
+    const handleTypingInputChange = (e) => {
+        if (!isTypingActive) return;
+        setCurrentTypingInput(e.target.value);
+        if (e.target.value.length === typingText.length) { setIsTypingActive(false); calculateTypingResult(); }
+    };
+    
+    const startCpsTest = () => {
+        setCpsClicks(0); setCpsResult(null); setCpsTimer(cpsTimeLimit); setIsCpsActive(true); setShowCpsModal(true);
+    };
+    
+    const calculateCpsResult = useCallback(async () => { 
+        const cps = cpsTimeLimit > 0 ? (cpsClicks / cpsTimeLimit).toFixed(2) : 0;
+        const resultData = { cps, clicks: cpsClicks, timeLimit: cpsTimeLimit, type: cpsTestType, timestamp: serverTimestamp() };
+        setCpsResult(resultData);
+        if (isAuthReady && userId) {
+            try { await addDoc(collection(db, `artifacts/${appId}/users/${userId}/cpsReports`), resultData); } 
+            catch (error) { console.error("Error saving CPS report:", error); }
+        }
+    }, [cpsClicks, cpsTimeLimit, cpsTestType, isAuthReady, userId, appId]);
+
+    useEffect(() => {
+        let interval;
+        if (isCpsActive && cpsTimer > 0) {
+            interval = setInterval(() => setCpsTimer(prev => prev - 1), 1000);
+        } else if (isCpsActive && cpsTimer === 0) {
+            setIsCpsActive(false); calculateCpsResult();
+        }
+        return () => clearInterval(interval);
+    }, [isCpsActive, cpsTimer, calculateCpsResult]); 
+
+    const handleCpsClick = () => { if (isCpsActive) setCpsClicks(prev => prev + 1); };
+    
+    const handleCpsKeyPress = useCallback((e) => {
+        if (cpsTestType === 'spacebar' && e.code === 'Space' && isCpsActive && showCpsModal) { 
+            e.preventDefault(); setCpsClicks(prev => prev + 1);
+        }
+    }, [isCpsActive, cpsTestType, showCpsModal]);
+
+    useEffect(() => {
+        if (cpsTestType === 'spacebar' && isCpsActive && showCpsModal) document.addEventListener('keydown', handleCpsKeyPress);
+        return () => { if (cpsTestType === 'spacebar') document.removeEventListener('keydown', handleCpsKeyPress); };
+    }, [cpsTestType, isCpsActive, showCpsModal, handleCpsKeyPress]);
+
+    useEffect(() => {
+        const handleKeyDown = (e) => setPressedKeys(prev => ({ ...prev, [e.key.toLowerCase()]: true, [e.code]: true }));
+        const handleKeyUp = (e) => setPressedKeys(prev => ({ ...prev, [e.key.toLowerCase()]: false, [e.code]: false }));
+        if (currentPage === 'keybind-test') {
+            window.addEventListener('keydown', handleKeyDown); window.addEventListener('keyup', handleKeyUp);
+        }
+        return () => { window.removeEventListener('keydown', handleKeyDown); window.removeEventListener('keyup', handleKeyUp); };
+    }, [currentPage]);
+
+    const deleteReport = async (reportId, type) => {
+        if (!isAuthReady || !userId || !window.confirm(`Are you sure you want to delete this ${type} report?`)) return;
+        const collectionName = type === 'typing' ? 'typingReports' : 'cpsReports';
+        try { await deleteDoc(doc(db, `artifacts/${appId}/users/${userId}/${collectionName}/${reportId}`)); } 
+        catch (error) { console.error(`Error deleting ${type} report:`, error); }
+    };
+
+    const deleteAllData = async () => {
+        if (!isAuthReady || !userId || !window.confirm("Are you sure you want to delete ALL your reports and settings? This cannot be undone.")) return;
+        try {
+            const deletePromises = [
+                getDocs(collection(db, `artifacts/${appId}/users/${userId}/typingReports`)).then(snap => snap.docs.forEach(d => deleteDoc(d.ref))),
+                getDocs(collection(db, `artifacts/${appId}/users/${userId}/cpsReports`)).then(snap => snap.docs.forEach(d => deleteDoc(d.ref))),
+                deleteDoc(doc(db, `artifacts/${appId}/users/${userId}/settings/appTheme`))
+            ];
+            await Promise.all(deletePromises);
+            setTheme('dark'); 
+        } catch (error) { console.error("Error deleting all data:", error); }
+    };
+
+    const openGameModal = (gameId) => { setActiveGame(gameId); setShowGameModal(true); };
+    const closeGameModal = () => { setShowGameModal(false); setActiveGame(null); };
+
+    // --- Gemini API Functions ---
+    const handleGenerateCreativePrompt = async () => {
+        setIsGeneratingPrompt(true);
+        setCustomText("Generating creative prompt... ✨");
+        setUseCustomText(true); // Select custom text immediately
+
+        const userPrompt = "Generate a short, engaging, and unique paragraph of about 50-70 words for a typing test. Make it creative, fun to type, and suitable for all audiences. Avoid complex punctuation if possible.";
+        const payload = { contents: [{ role: "user", parts: [{ text: userPrompt }] }] };
+        const apiKey = ""; // Provided by Canvas environment
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+        try {
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(`API Error: ${response.status} ${errorData.error?.message || 'Unknown error'}`);
+            }
+            const result = await response.json();
+            if (result.candidates && result.candidates.length > 0 &&
+                result.candidates[0].content && result.candidates[0].content.parts &&
+                result.candidates[0].content.parts.length > 0) {
+                const generatedText = result.candidates[0].content.parts[0].text;
+                setCustomText(generatedText);
+            } else {
+                setCustomText("Sorry, couldn't generate a prompt. Please try again.");
+                console.error("Unexpected API response structure:", result);
+            }
+        } catch (error) {
+            console.error("Error generating creative prompt:", error);
+            setCustomText(`Error: ${error.message}. Try again or use a default prompt.`);
+        } finally {
+            setIsGeneratingPrompt(false);
+        }
+    };
+
+    const handleAnalyzePerformance = async (report, type) => {
+        setIsAnalyzing(true);
+        setAnalysisText("");
+        setAnalysisError("");
+        setShowAnalysisModal(true);
+
+        let userPrompt = "";
+        if (type === 'typing') {
+            userPrompt = `Analyze this typing test result: WPM: ${report.wpm}, Accuracy: ${report.accuracy}%, Correct Words: ${report.correctWords}/${report.typedWords}, Difficulty: ${report.difficulty}. Provide a brief (2-3 sentences), encouraging, and actionable tip for improvement. Be friendly and positive.`;
+        } else if (type === 'cps') {
+            userPrompt = `Analyze this CPS (clicks per second) test result: CPS: ${report.cps}, Total Clicks: ${report.clicks}, Test Duration: ${report.timeLimit} seconds, Test Type: ${report.type}. Provide a brief (2-3 sentences), encouraging, and actionable tip for improvement. Be friendly and positive.`;
+        }
+
+        const payload = { contents: [{ role: "user", parts: [{ text: userPrompt }] }] };
+        const apiKey = ""; // Provided by Canvas environment
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+        
+        try {
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(`API Error: ${response.status} ${errorData.error?.message || 'Unknown error'}`);
+            }
+            const result = await response.json();
+
+            if (result.candidates && result.candidates.length > 0 &&
+                result.candidates[0].content && result.candidates[0].content.parts &&
+                result.candidates[0].content.parts.length > 0) {
+                setAnalysisText(result.candidates[0].content.parts[0].text);
+            } else {
+                setAnalysisError("Sorry, couldn't generate analysis. Unexpected response from server.");
+                console.error("Unexpected API response structure for analysis:", result);
+            }
+        } catch (error) {
+            console.error("Error analyzing performance:", error);
+            setAnalysisError(`Error: ${error.message}. Please try again.`);
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
+
+
+    const renderPage = () => {
+        switch (currentPage) {
+            case 'dashboard': return <Dashboard onNavigate={navigate} theme={theme} />;
+            case 'typing-test': return <TypingTestPage onStartTest={startTypingTest} timeLimit={typingTimeLimit} setTimeLimit={setTypingTimeLimit} difficulty={typingDifficulty} setDifficulty={setTypingDifficulty} customText={customText} setCustomText={setCustomText} useCustomText={useCustomText} setUseCustomText={setUseCustomText} theme={theme} onGeneratePrompt={handleGenerateCreativePrompt} isGeneratingPrompt={isGeneratingPrompt} />;
+            case 'cps-test': return <CpsTestPage onStartTest={startCpsTest} timeLimit={cpsTimeLimit} setTimeLimit={setCpsTimeLimit} testType={cpsTestType} setTestType={setCpsTestType} theme={theme} />;
+            case 'keybind-test': return <KeybindTestPage pressedKeys={pressedKeys} theme={theme} />;
+            case 'reports': return <ReportsPage typingReports={typingReports} cpsReports={cpsReports} onDeleteReport={deleteReport} theme={theme} onAnalyze={handleAnalyzePerformance} />;
+            case 'games': return <GamesPage showPopup={showGameCreatorPopup} setShowPopup={setShowGameCreatorPopup} gameCreatorMode={actualGameCreatorMode} setGameCreatorMode={setActualGameCreatorMode} userGameCode={userGameCode} setUserGameCode={setUserGameCode} theme={theme} userId={userId} onPlayGame={openGameModal} />;
+            case 'settings': return <SettingsPage currentTheme={theme} onToggleTheme={toggleTheme} onDeleteAllData={deleteAllData} userId={userId} />;
+            case 'info': return <InfoPage theme={theme} />;
+            default: return <Dashboard onNavigate={navigate} theme={theme} />;
+        }
+    };
+
+    const NavLink = ({ page, children, icon: Icon }) => (
+        <button onClick={() => navigate(page)} className={`flex items-center space-x-3 px-4 py-3 rounded-lg w-full text-left transition-colors duration-200 ${currentPage === page ? (theme === 'dark' ? 'bg-cyan-600 text-white shadow-md' : 'bg-cyan-500 text-white shadow-md') : (theme === 'dark' ? 'hover:bg-gray-700 text-gray-300' : 'hover:bg-gray-200 text-gray-700')}`}>
+            <Icon size={20} className={`${currentPage === page ? 'text-white' : (theme === 'dark' ? 'text-cyan-400' : 'text-cyan-600')}`} />
+            <span>{children}</span>
+        </button>
+    );
+
+    return (
+        <div className={`flex h-screen overflow-hidden ${theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-black'}`}>
+            <aside className={`fixed inset-y-0 left-0 z-30 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 md:flex md:flex-col transition-transform duration-300 ease-in-out w-64 ${theme === 'dark' ? 'bg-gray-800 border-r border-gray-700' : 'bg-white border-r border-gray-200'} p-4 space-y-2 shadow-lg md:shadow-none`}>
+                <div className="flex items-center justify-between md:justify-center mb-6 pt-2">
+                     <h1 className="text-2xl font-bold text-center" style={{ color: theme === 'dark' ? '#00ffff': '#007B7B', textShadow: theme === 'dark' ? '0 0 5px #00ffff, 0 0 10px #00ffff' : '0 0 5px #007B7B, 0 0 10px #007B7B' }}>Shadow Type</h1>
+                    <button onClick={() => setIsSidebarOpen(false)} className="md:hidden text-gray-500 hover:text-gray-300"><X size={24} /></button>
+                </div>
+                <nav className="flex-grow space-y-1">
+                    <NavLink page="dashboard" icon={LayoutDashboard}>Dashboard</NavLink>
+                    <NavLink page="typing-test" icon={Keyboard}>Typing Test</NavLink>
+                    <NavLink page="cps-test" icon={Gauge}>CPS Test</NavLink>
+                    <NavLink page="keybind-test" icon={Keyboard}>Keybind Test</NavLink>
+                    <NavLink page="reports" icon={FileText}>Reports</NavLink>
+                    <NavLink page="games" icon={Gamepad2}>Games</NavLink>
+                    <NavLink page="settings" icon={Settings}>Settings</NavLink>
+                    <NavLink page="info" icon={Info}>Info</NavLink>
+                </nav>
+                {userId && <div className={`mt-auto p-2 rounded-md text-xs ${theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'} break-all`}>UID: {userId}</div>}
+            </aside>
+
+            <div className="flex-1 flex flex-col overflow-hidden">
+                <header className={`${theme === 'dark' ? 'bg-gray-800 border-b border-gray-700' : 'bg-white border-b border-gray-200'} p-4 shadow-md flex items-center justify-between z-10`}> 
+                    <div className="flex items-center">
+                        <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="md:hidden text-gray-500 hover:text-gray-300 mr-4"><Menu size={24} /></button>
+                        <h1 className="text-3xl font-bold" style={{ color: theme === 'dark' ? '#00ffff': '#007B7B', textShadow: theme === 'dark' ? '0 0 8px #00ffff, 0 0 15px #00ffff, 0 0 20px #00ffff' : '0 0 8px #00A0A0, 0 0 15px #00A0A0' }}>Shadow Type Studio</h1>
+                    </div>
+                    <button onClick={toggleTheme} className={`p-2 rounded-full hover:bg-opacity-20 transition-colors ${theme === 'dark' ? 'text-yellow-400 hover:bg-yellow-400' : 'text-indigo-600 hover:bg-indigo-600'}`}>
+                        {theme === 'dark' ? <Sun size={24} /> : <Moon size={24} />}
+                    </button>
+                </header>
+                <main className="flex-1 overflow-x-hidden overflow-y-auto p-6">
+                    <div style={{ transition: 'opacity 0.3s ease-in-out', opacity: contentOpacity }}>
+                        {isAuthReady ? renderPage() : (showWelcome ? null : <LoadingSpinner />)}
+                    </div>
+                </main>
+            </div>
+
+            <Modal isOpen={showTypingModal} onClose={() => setShowTypingModal(false)} title="Typing Test" theme={theme}>
+                {isTypingActive && (
+                    <div className="space-y-4">
+                        <div className={`p-4 rounded-md ${theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'} max-h-40 overflow-y-auto text-lg leading-relaxed font-mono`}>
+                            {typingText.split('').map((char, index) => {
+                                let color;
+                                if (index < currentTypingInput.length) {
+                                    color = char === currentTypingInput[index] ? (theme === 'dark' ? 'text-green-400' : 'text-green-600') : (theme === 'dark' ? 'text-red-400' : 'text-red-600');
+                                } else { color = theme === 'dark' ? 'text-gray-400' : 'text-gray-500'; }
+                                return <span key={index} className={color}>{char}</span>;
+                            })}
+                        </div>
+                        <textarea value={currentTypingInput} onChange={handleTypingInputChange} className={`w-full p-3 rounded-md focus:ring-2 focus:ring-cyan-500 outline-none resize-none h-32 font-mono text-lg ${theme === 'dark' ? 'bg-gray-600 text-white' : 'bg-white text-black border border-gray-300'}`} placeholder="Start typing here..." autoFocus disabled={!isTypingActive} />
+                        <div className="text-2xl font-semibold text-center">Time Left: {Math.floor(typingTimer / 60)}:{(typingTimer % 60).toString().padStart(2, '0')}</div>
+                    </div>
+                )}
+                {typingResult && !isTypingActive && (
+                     <div className={`p-4 rounded-lg ${theme === 'dark' ? 'bg-gray-700' : '' }`}>
+                        <h3 className={`text-2xl font-bold mb-4 text-center ${theme === 'dark' ? 'text-cyan-400' : 'text-cyan-600'}`}>Test Completed!</h3>
+                        <p className="text-lg">WPM: <span className="font-semibold text-xl">{typingResult.wpm}</span></p>
+                        <p className="text-lg">Accuracy: <span className="font-semibold text-xl">{typingResult.accuracy}%</span></p>
+                        <p className="text-lg">Correct Words: <span className="font-semibold">{typingResult.correctWords} / {typingResult.typedWords} (typed)</span></p>
+                        <p className="text-sm text-gray-400">Prompt: {typingResult.totalWordsInPrompt} words, Difficulty: {typingResult.difficulty}, Time: {typingResult.timeLimit} min(s)</p>
+                        <div className="mt-6 flex justify-end space-x-3">
+                            <button onClick={() => setShowTypingModal(false)} className={`py-2 px-4 rounded-lg shadow-md transition-colors ${theme === 'dark' ? 'bg-gray-600 hover:bg-gray-500' : 'bg-gray-300 hover:bg-gray-400 text-black'}`}>Close</button>
+                        </div>
+                    </div>
+                )}
+            </Modal>
+
+            <Modal isOpen={showCpsModal} onClose={() => { setIsCpsActive(false); setShowCpsModal(false);}} title={`CPS Test (${cpsTestType})`} theme={theme}>
+                {isCpsActive && (
+                    <div className="space-y-4 text-center">
+                        <div className="text-4xl font-bold">{cpsClicks}</div>
+                        <div className="text-2xl">Time Left: {cpsTimer}s</div>
+                        {cpsTestType === 'mouse' && ( <button onClick={handleCpsClick} className={`w-full h-48 rounded-lg text-2xl font-semibold transition-transform transform active:scale-95 ${theme === 'dark' ? 'bg-cyan-600 hover:bg-cyan-500' : 'bg-cyan-500 hover:bg-cyan-400'} text-white shadow-xl`}>Click Here!</button> )}
+                        {cpsTestType === 'spacebar' && ( <div className={`w-full h-48 rounded-lg flex items-center justify-center text-2xl font-semibold ${theme === 'dark' ? 'bg-gray-700' : 'bg-gray-600'} text-white shadow-xl`}>Press Spacebar!</div> )}
+                    </div>
+                )}
+                {cpsResult && !isCpsActive && (
+                    <div className={`p-4 rounded-lg ${theme === 'dark' ? 'bg-gray-700' : ''}`}>
+                        <h3 className={`text-2xl font-bold mb-4 text-center ${theme === 'dark' ? 'text-cyan-400' : 'text-cyan-600'}`}>Test Completed!</h3>
+                        <p className="text-lg">CPS: <span className="font-semibold text-xl">{cpsResult.cps}</span></p>
+                        <p className="text-lg">Total Clicks: <span className="font-semibold">{cpsResult.clicks}</span></p>
+                        <p className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Type: {cpsResult.type}, Time: {cpsResult.timeLimit}s</p>
+                        <div className="mt-6 flex justify-end space-x-3">
+                             <button onClick={() => { setIsCpsActive(false); setShowCpsModal(false);}} className={`py-2 px-4 rounded-lg shadow-md transition-colors ${theme === 'dark' ? 'bg-gray-600 hover:bg-gray-500' : 'bg-gray-300 hover:bg-gray-400 text-black'}`}>Close</button>
+                            <button onClick={() => { setShowCpsModal(false); startCpsTest(); }} className={`py-2 px-4 rounded-lg shadow-md transition-colors ${theme === 'dark' ? 'bg-blue-600 hover:bg-blue-500' : 'bg-blue-500 hover:bg-blue-400'} text-white`}>Test Again</button>
+                        </div>
+                    </div>
+                )}
+            </Modal>
+
+            {/* Game Modals */}
+            {activeGame === 'spacebarFrenzy' && (
+                <Modal isOpen={showGameModal} onClose={closeGameModal} title="Spacebar Frenzy!" theme={theme} size="lg">
+                    <SpacebarFrenzyGame theme={theme} onGameEnd={closeGameModal} />
+                </Modal>
+            )}
+            {activeGame === 'clickNinja' && (
+                <Modal isOpen={showGameModal} onClose={closeGameModal} title="Click Ninja" theme={theme} size="xl">
+                    <ClickNinjaGame theme={theme} onGameEnd={closeGameModal} />
+                </Modal>
+            )}
+            {/* Performance Analysis Modal */}
+            <Modal isOpen={showAnalysisModal} onClose={() => setShowAnalysisModal(false)} title="✨ Performance Analysis" theme={theme} size="lg">
+                {isAnalyzing && <div className="flex items-center justify-center p-4"><LoadingSpinner /> <span className="ml-2">Analyzing...</span></div>}
+                {analysisError && <p className={`text-red-500 ${theme === 'dark' ? 'text-red-400' : 'text-red-600'} p-4`}>{analysisError}</p>}
+                {!isAnalyzing && analysisText && <p className={`whitespace-pre-wrap p-4 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>{analysisText}</p>}
+                {!isAnalyzing && !analysisError && !analysisText && <p className="p-4">No analysis available yet.</p>}
+            </Modal>
+
+        </div>
+    );
+};
+
+
+// --- Page Components ---
+const Dashboard = ({ onNavigate, theme }) => {
+    const cardBaseStyle = `rounded-xl p-6 shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 cursor-pointer ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'}`;
+    const titleStyle = `text-2xl font-semibold mb-3 ${theme === 'dark' ? 'text-cyan-400' : 'text-cyan-600'}`;
+    const descriptionStyle = `mb-4 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`;
+    const buttonStyle = `w-full py-2 px-4 rounded-lg font-semibold transition-colors ${theme === 'dark' ? 'bg-cyan-600 hover:bg-cyan-500 text-white' : 'bg-cyan-500 hover:bg-cyan-400 text-white'} shadow-md`;
+
+    return (
+        <div className="space-y-8">
+            <h2 className={`text-4xl font-bold mb-8 ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>Dashboard</h2>
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className={cardBaseStyle} onClick={() => onNavigate('typing-test')}>
+                    <Keyboard size={40} className={`${theme === 'dark' ? 'text-cyan-400' : 'text-cyan-600'} mb-3`} />
+                    <h3 className={titleStyle}>Typing Test</h3>
+                    <p className={descriptionStyle}>Challenge your typing speed and accuracy.</p>
+                    <button className={buttonStyle}>Start Typing Test</button>
+                </div>
+                <div className={cardBaseStyle} onClick={() => onNavigate('cps-test')}>
+                    <Gauge size={40} className={`${theme === 'dark' ? 'text-cyan-400' : 'text-cyan-600'} mb-3`} />
+                    <h3 className={titleStyle}>CPS Test</h3>
+                    <p className={descriptionStyle}>Test your clicks per second.</p>
+                    <button className={buttonStyle}>Start CPS Test</button>
+                </div>
+                <div className={cardBaseStyle} onClick={() => onNavigate('keybind-test')}>
+                    <Keyboard size={40} className={`${theme === 'dark' ? 'text-cyan-400' : 'text-cyan-600'} mb-3`} />
+                    <h3 className={titleStyle}>Keybind Test</h3>
+                    <p className={descriptionStyle}>Check your keyboard keys.</p>
+                    <button className={buttonStyle}>Open Keybind Test</button>
+                </div>
+                <div className={cardBaseStyle} onClick={() => onNavigate('reports')}>
+                    <FileText size={40} className={`${theme === 'dark' ? 'text-cyan-400' : 'text-cyan-600'} mb-3`} />
+                    <h3 className={titleStyle}>View Reports</h3>
+                    <p className={descriptionStyle}>Review past performances. ✨ Now with AI Analysis!</p>
+                    <button className={buttonStyle}>Go to Reports</button>
+                </div>
+                <div className={cardBaseStyle} onClick={() => onNavigate('games')}>
+                    <Gamepad2 size={40} className={`${theme === 'dark' ? 'text-cyan-400' : 'text-cyan-600'} mb-3`} />
+                    <h3 className={titleStyle}>Play Games</h3>
+                    <p className={descriptionStyle}>Enjoy mini-games or create your own!</p>
+                    <button className={buttonStyle}>Explore Games</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const TypingTestPage = ({ onStartTest, timeLimit, setTimeLimit, difficulty, setDifficulty, customText, setCustomText, useCustomText, setUseCustomText, theme, onGeneratePrompt, isGeneratingPrompt }) => {
+    const inputStyle = `w-full p-3 rounded-md focus:ring-2 focus:ring-cyan-500 outline-none ${theme === 'dark' ? 'bg-gray-700 text-white placeholder-gray-400' : 'bg-white text-black border border-gray-300 placeholder-gray-500'} shadow-sm`;
+    const labelStyle = `block mb-2 text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`;
+    const buttonStyle = `py-3 px-6 rounded-lg font-semibold transition-colors text-white shadow-md hover:shadow-lg ${theme === 'dark' ? 'bg-cyan-600 hover:bg-cyan-500' : 'bg-cyan-500 hover:bg-cyan-400'}`;
+    const checkboxStyle = `w-4 h-4 text-cyan-600 rounded focus:ring-cyan-500 mr-2 ${theme === 'dark' ? 'bg-gray-600 border-gray-500' : 'bg-gray-200 border-gray-400'}`;
+    const geminiButtonStyle = `py-2 px-4 rounded-lg font-semibold transition-colors text-white shadow-md ${theme === 'dark' ? 'bg-purple-600 hover:bg-purple-500' : 'bg-purple-500 hover:bg-purple-400'} flex items-center justify-center space-x-2`;
+
+
+    return (
+        <div className={`p-6 rounded-xl shadow-2xl ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'}`}>
+            <h2 className={`text-3xl font-bold mb-8 ${theme === 'dark' ? 'text-cyan-400' : 'text-cyan-600'}`}>Typing Test Setup</h2>
+            <div className="space-y-6">
+                <div>
+                    <label htmlFor="timeLimit" className={labelStyle}>Test Duration (minutes): {timeLimit}</label>
+                    <input type="range" id="timeLimit" min="1" max="10" value={timeLimit} onChange={(e) => setTimeLimit(parseInt(e.target.value))} className={`w-full h-2 rounded-lg appearance-none cursor-pointer accent-cyan-500 ${theme === 'dark' ? 'bg-gray-600' : 'bg-gray-300'}`} />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+                    <div>
+                        <label htmlFor="difficulty" className={labelStyle}>Difficulty (for random words):</label>
+                        <select id="difficulty" value={difficulty} onChange={(e) => setDifficulty(e.target.value)} className={inputStyle} disabled={useCustomText}>
+                            <option value="easy">Easy</option> <option value="medium">Medium</option> <option value="hard">Hard</option>
+                        </select>
+                    </div>
+                    <button onClick={onGeneratePrompt} className={`${geminiButtonStyle} md:w-auto`} disabled={isGeneratingPrompt}>
+                        <Sparkles size={18} className="mr-1" /> 
+                        {isGeneratingPrompt ? 'Generating...' : '✨ Generate Creative Prompt'}
+                    </button>
+                </div>
+                 <div>
+                    <div className="flex items-center mb-2">
+                        <input type="checkbox" id="useCustomText" checked={useCustomText} onChange={(e) => setUseCustomText(e.target.checked)} className={checkboxStyle} />
+                        <label htmlFor="useCustomText" className={labelStyle}>Use Custom Text / Generated Prompt</label>
+                    </div>
+                    { (useCustomText || isGeneratingPrompt) && ( 
+                        <textarea 
+                            id="customText"
+                            value={customText}
+                            onChange={(e) => setCustomText(e.target.value)}
+                            className={`${inputStyle} h-32 resize-none`}
+                            placeholder={isGeneratingPrompt ? "Generating creative prompt... ✨" : "Paste or type your custom text here..."}
+                            readOnly={isGeneratingPrompt}
+                        />
+                    )}
+                </div>
+                <button onClick={onStartTest} className={`${buttonStyle} w-full flex items-center justify-center space-x-2`}>
+                    <Play size={20} /> <span>Start Typing Test</span>
+                </button>
+            </div>
+        </div>
+    );
+};
+
+const CpsTestPage = ({ onStartTest, timeLimit, setTimeLimit, testType, setTestType, theme }) => {
+    const inputStyle = `w-full p-3 rounded-md focus:ring-2 focus:ring-cyan-500 outline-none ${theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-white text-black border border-gray-300'} shadow-sm`;
+    const labelStyle = `block mb-2 text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`;
+    const buttonStyle = `py-3 px-6 rounded-lg font-semibold transition-colors text-white shadow-md hover:shadow-lg ${theme === 'dark' ? 'bg-cyan-600 hover:bg-cyan-500' : 'bg-cyan-500 hover:bg-cyan-400'}`;
+
+    return (
+        <div className={`p-6 rounded-xl shadow-2xl ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'}`}>
+            <h2 className={`text-3xl font-bold mb-8 ${theme === 'dark' ? 'text-cyan-400' : 'text-cyan-600'}`}>CPS Test Setup</h2>
+            <div className="space-y-6">
+                <div>
+                    <label htmlFor="cpsTimeLimit" className={labelStyle}>Test Duration (seconds): {timeLimit}</label>
+                     <input type="range" id="cpsTimeLimit" min="5" max="60" step="5" value={timeLimit} onChange={(e) => setTimeLimit(parseInt(e.target.value))} className={`w-full h-2 rounded-lg appearance-none cursor-pointer accent-cyan-500 ${theme === 'dark' ? 'bg-gray-600' : 'bg-gray-300'}`} />
+                </div>
+                <div>
+                    <label htmlFor="cpsTestType" className={labelStyle}>Test Type:</label>
+                    <select id="cpsTestType" value={testType} onChange={(e) => setTestType(e.target.value)} className={inputStyle}>
+                        <option value="mouse">Mouse Click</option> <option value="spacebar">Spacebar Press</option>
+                    </select>
+                </div>
+                <button onClick={onStartTest} className={`${buttonStyle} w-full flex items-center justify-center space-x-2`}>
+                    <Play size={20} /> <span>Start CPS Test</span>
+                </button>
+            </div>
+            <div className={`mt-8 p-4 rounded-lg ${theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'} shadow-inner`}>
+                <h3 className={`text-xl font-semibold mb-3 ${theme === 'dark' ? 'text-cyan-300' : 'text-cyan-700'}`}>Play CPS Games</h3>
+                <p className={`${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'} mb-4`}>More CPS games coming soon!</p>
+                <button onClick={() => { 
+                    const customAlert = document.createElement('div');
+                    customAlert.innerHTML = `<div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000;"><div style="background-color: ${theme === 'dark' ? '#374151' : 'white'}; color: ${theme === 'dark' ? 'white' : 'black'}; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"><p>Navigating to CPS games... (Not implemented yet)</p><button id="customAlertOk" style="margin-top: 15px; padding: 8px 16px; background-color: #06B6D4; color: white; border: none; border-radius: 4px; cursor: pointer;">OK</button></div></div>`;
+                    document.body.appendChild(customAlert);
+                    document.getElementById('customAlertOk').onclick = () => customAlert.remove();
+                }} className={`py-2 px-4 rounded-lg font-semibold transition-colors text-white shadow-md ${theme === 'dark' ? 'bg-purple-600 hover:bg-purple-500' : 'bg-purple-500 hover:bg-purple-400'}`}>
+                    Go to CPS Games
+                </button>
+            </div>
+        </div>
+    );
+};
+
+const KeybindTestPage = ({ pressedKeys, theme }) => {
+    return (
+        <div className={`p-6 rounded-xl shadow-2xl ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'}`}>
+            <h2 className={`text-3xl font-bold mb-6 text-center ${theme === 'dark' ? 'text-cyan-400' : 'text-cyan-600'}`}>Keybind Test</h2>
+            <p className={`text-center mb-8 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>Press any key to see it light up.</p>
+            <div className={`p-4 rounded-lg shadow-inner ${theme === 'dark' ? 'bg-gray-900' : 'bg-gray-200'}`}>
+                {keyLayout.map((row, rowIndex) => (
+                    <div key={rowIndex} className="flex justify-center space-x-1 mb-1 flex-wrap"> 
+                        {row.map((key) => {
+                            const keyId = key.length > 1 ? key : key.toLowerCase(); 
+                            const isPressed = pressedKeys[keyId] || pressedKeys[key.toLowerCase()] || pressedKeys[key]; 
+                            let keyStyle = `h-10 md:h-12 rounded font-mono text-xs md:text-sm flex items-center justify-center border transition-all duration-50 ${theme === 'dark' ? 'border-gray-600' : 'border-gray-400'} ${isPressed ? (theme === 'dark' ? 'bg-cyan-500 text-black scale-95 shadow-inner' : 'bg-cyan-400 text-white scale-95 shadow-inner') : (theme === 'dark' ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-300 text-gray-700 hover:bg-gray-400')}`;
+                            if (key === 'Backspace') keyStyle += ' w-20 md:w-28';
+                            else if (key === 'Tab') keyStyle += ' w-14 md:w-20';
+                            else if (key === '\\') keyStyle += ' w-14 md:w-20';
+                            else if (key === 'CapsLock') keyStyle += ' w-20 md:w-28';
+                            else if (key === 'Enter') keyStyle += ' w-20 md:w-28';
+                            else if (key.includes('Shift')) keyStyle += ' w-24 md:w-36';
+                            else if (key.includes('Control') || key.includes('Alt') || key.includes('Meta')) keyStyle += ' w-14 md:w-20';
+                            else if (key === 'Space') keyStyle += ' flex-grow min-w-[150px] md:min-w-[250px] lg:w-96';
+                            else keyStyle += ' w-10 md:w-12';
+                            return ( <div key={key} className={keyStyle} title={key}>{key.replace('Left', 'L').replace('Right', 'R').replace('Key', '').replace('Control','Ctrl').replace('Meta','Cmd')}</div> );
+                        })}
+                    </div>
+                ))}
+            </div>
+             <div className={`mt-6 p-3 rounded ${theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'} text-xs break-all`}>
+                Pressed Keys: {Object.entries(pressedKeys).filter(([, val]) => val).map(([key]) => key).join(', ') || "None"}
+            </div>
+        </div>
+    );
+};
+
+const ReportsPage = ({ typingReports, cpsReports, onDeleteReport, theme, onAnalyze }) => {
+    const cardStyle = `rounded-lg p-4 shadow-lg ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'}`;
+    const titleStyle = `text-xl font-semibold mb-3 ${theme === 'dark' ? 'text-cyan-400' : 'text-cyan-600'}`;
+    const formatDate = (timestamp) => timestamp ? new Date(timestamp.seconds * 1000).toLocaleString() : 'N/A';
+    const renderChart = (data, dataKey, name, color) => (
+        <ResponsiveContainer width="100%" height={200}>
+            <LineChart data={data}>
+                <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? "#4A5568" : "#CBD5E0"} />
+                <XAxis dataKey="timestamp" tickFormatter={(ts) => ts ? new Date(ts.seconds * 1000).toLocaleDateString() : ''} stroke={theme === 'dark' ? "#A0AEC0" : "#4A5568"} />
+                <YAxis stroke={theme === 'dark' ? "#A0AEC0" : "#4A5568"} />
+                <Tooltip contentStyle={{ backgroundColor: theme === 'dark' ? '#2D3748' : '#FFFFFF', border: '1px solid #4A5568', borderRadius: '0.5rem' }} labelStyle={{ color: theme === 'dark' ? '#E2E8F0' : '#1A202C' }} itemStyle={{ color: theme === 'dark' ? '#E2E8F0' : '#1A202C' }}/>
+                <Legend />
+                <Line type="monotone" dataKey={dataKey} name={name} stroke={color} strokeWidth={2} dot={{ r: 4, fill: color }} activeDot={{ r: 6, stroke: theme === 'dark' ? 'white' : 'black' }} />
+            </LineChart>
+        </ResponsiveContainer>
+    );
+    const lastNTypingReports = useMemo(() => typingReports.slice(0, 10).reverse(), [typingReports]);
+    const lastNCPSReports = useMemo(() => cpsReports.slice(0, 10).reverse(), [cpsReports]);
+
+    return (
+        <div className="space-y-8">
+            <h2 className={`text-3xl font-bold mb-6 ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>Test Reports</h2>
+            <section>
+                <h3 className={`text-2xl font-semibold mb-4 ${theme === 'dark' ? 'text-cyan-300' : 'text-cyan-700'}`}>Typing Test Reports</h3>
+                {typingReports.length > 0 && <div className={`${cardStyle} mb-6`}>{renderChart(lastNTypingReports, "wpm", "WPM", "#38B2AC")}</div>}
+                {typingReports.length === 0 ? <p className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>No typing reports yet.</p> : (
+                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {typingReports.map(report => (
+                            <div key={report.id} className={cardStyle}>
+                                <h4 className={titleStyle}>WPM: {report.wpm}</h4> <p>Accuracy: {report.accuracy}%</p> <p>Correct: {report.correctWords}/{report.typedWords}</p> <p>Difficulty: {report.difficulty}</p> <p>Time: {report.timeLimit} min(s)</p> <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>{formatDate(report.timestamp)}</p>
+                                <div className="mt-3 flex justify-between items-center">
+                                    <button onClick={() => onAnalyze(report, 'typing')} className={`p-1.5 rounded flex items-center text-sm ${theme === 'dark' ? 'bg-purple-600 hover:bg-purple-500 text-white' : 'bg-purple-500 hover:bg-purple-400 text-white'}`} title="✨ Analyze Performance">
+                                        <Brain size={16} className="mr-1" /> Analyze
+                                    </button>
+                                    <div className="flex space-x-2">
+                                        <button onClick={() => alert("Export not implemented.")} className={`p-1.5 rounded ${theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-300'}`} title="Export"><Download size={18} className={theme === 'dark' ? 'text-gray-400' : 'text-gray-500'} /></button>
+                                        <button onClick={() => onDeleteReport(report.id, 'typing')} className={`p-1.5 rounded ${theme === 'dark' ? 'hover:bg-red-800' : 'hover:bg-red-200'}`} title="Delete"><Trash2 size={18} className="text-red-500" /></button>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </section>
+            <section>
+                <h3 className={`text-2xl font-semibold mb-4 ${theme === 'dark' ? 'text-cyan-300' : 'text-cyan-700'}`}>CPS Test Reports</h3>
+                {cpsReports.length > 0 && <div className={`${cardStyle} mb-6`}>{renderChart(lastNCPSReports, "cps", "CPS", "#805AD5")}</div>}
+                {cpsReports.length === 0 ? <p className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>No CPS reports yet.</p> : (
+                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {cpsReports.map(report => (
+                            <div key={report.id} className={cardStyle}>
+                                <h4 className={titleStyle}>CPS: {report.cps}</h4> <p>Clicks: {report.clicks}</p> <p>Type: {report.type}</p> <p>Time: {report.timeLimit}s</p> <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>{formatDate(report.timestamp)}</p>
+                                 <div className="mt-3 flex justify-between items-center">
+                                     <button onClick={() => onAnalyze(report, 'cps')} className={`p-1.5 rounded flex items-center text-sm ${theme === 'dark' ? 'bg-purple-600 hover:bg-purple-500 text-white' : 'bg-purple-500 hover:bg-purple-400 text-white'}`} title="✨ Analyze Performance">
+                                        <Brain size={16} className="mr-1" /> Analyze
+                                    </button>
+                                    <div className="flex space-x-2">
+                                        <button onClick={() => alert("Export not implemented.")} className={`p-1.5 rounded ${theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-300'}`} title="Export"><Download size={18} className={theme === 'dark' ? 'text-gray-400' : 'text-gray-500'} /></button>
+                                        <button onClick={() => onDeleteReport(report.id, 'cps')} className={`p-1.5 rounded ${theme === 'dark' ? 'hover:bg-red-800' : 'hover:bg-red-200'}`} title="Delete"><Trash2 size={18} className="text-red-500" /></button>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </section>
+        </div>
+    );
+};
+
+const GamesPage = ({ showPopup, setShowPopup, gameCreatorMode, setGameCreatorMode, userGameCode, setUserGameCode, theme, userId, onPlayGame }) => {
+    const [previewSrcDoc, setPreviewSrcDoc] = useState('');
+    const [showDeployConfirm, setShowDeployConfirm] = useState(false);
+    const [deployedGames, setDeployedGames] = useState([]);
+    const [isLoadingGames, setIsLoadingGames] = useState(false);
+
+    const handleRunCode = () => {
+        const { html, css, js } = userGameCode;
+        setPreviewSrcDoc(`<html><head><style>${css}</style></head><body>${html}</body><script>${js}</script></html>`);
+    };
+    
+    const confirmDeployGame = async () => {
+        if (!userId) { alert("You must be logged in to deploy a game."); return; }
+        if (!userGameCode.html && !userGameCode.js) { alert("Please add some HTML or JavaScript to your game."); return; }
+        try {
+            await addDoc(collection(db, `artifacts/${appId}/public/data/userCreatedGames`), { ...userGameCode, createdBy: userId, createdAt: serverTimestamp(), name: `User Game - ${new Date().toLocaleTimeString()}` });
+            setShowDeployConfirm(false); alert("Game deployed successfully!"); fetchDeployedGames(); 
+        } catch (error) { console.error("Error deploying game:", error); alert("Failed to deploy game."); }
+    };
+
+    const fetchDeployedGames = useCallback(async () => {
+        setIsLoadingGames(true);
+        try {
+            const q = query(collection(db, `artifacts/${appId}/public/data/userCreatedGames`)); 
+            const snapshot = await getDocs(q);
+            setDeployedGames(snapshot.docs.map(d => ({id: d.id, ...d.data()})).sort((a,b) => b.createdAt?.seconds - a.createdAt?.seconds));
+        } catch (error) { console.error("Error fetching deployed games:", error); }
+        setIsLoadingGames(false);
+    }, [appId]);
+
+    useEffect(() => { if (!gameCreatorMode) fetchDeployedGames(); }, [gameCreatorMode, fetchDeployedGames]);
+
+    const coreGames = [
+        { id: 'spacebarFrenzy', name: "Spacebar Frenzy", description: "Mash the spacebar as fast as you can!", type: "spacebar" },
+        { id: 'clickNinja', name: "Click Ninja", description: "Right-click the moving targets before they disappear.", type: "mouse_cps" },
+    ];
+    const placeholderGames = [
+        { id: 'typingRacer', name: "Typing Racer", description: "Type words to race (Coming Soon).", type: "typing", isPlaceholder: true },
+    ];
+
+
+    if (showPopup && gameCreatorMode === null) {
+        return (
+            <Modal isOpen={true} onClose={() => setShowPopup(false)} title="New Update!" theme={theme}>
+                <div className="text-center">
+                    <Gamepad2 size={48} className={`mx-auto mb-4 ${theme === 'dark' ? 'text-cyan-400' : 'text-cyan-600'}`} />
+                    <h3 className="text-2xl font-semibold mb-3">Make Your Own Mini Games!</h3>
+                    <p className={`${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} mb-6`}>Use HTML, CSS, and JS.</p>
+                    <div className="flex justify-center space-x-4">
+                        <button onClick={() => setShowPopup(false)} className={`py-2 px-6 rounded-lg shadow-md transition-colors ${theme === 'dark' ? 'bg-gray-600 hover:bg-gray-500' : 'bg-gray-400 hover:bg-gray-500 text-black'}`}>Not Now</button>
+                        <button onClick={() => {setGameCreatorMode('code'); setShowPopup(false);}} className={`py-2 px-6 rounded-lg shadow-md transition-colors text-white ${theme === 'dark' ? 'bg-cyan-600 hover:bg-cyan-500' : 'bg-cyan-500 hover:bg-cyan-400'}`}>Try It!</button>
+                    </div>
+                </div>
+            </Modal>
+        );
+    }
+
+    if (gameCreatorMode) {
+        return (
+            <div className={`p-6 rounded-xl shadow-2xl ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'}`}>
+                <div className="flex justify-between items-center mb-6">
+                    <h2 className={`text-3xl font-bold ${theme === 'dark' ? 'text-cyan-400' : 'text-cyan-600'}`}>Code Your Own Game</h2>
+                    <button onClick={() => setGameCreatorMode(null)} className={`py-2 px-4 rounded-lg shadow-md ${theme === 'dark' ? 'bg-gray-600 hover:bg-gray-500' : 'bg-gray-300 hover:bg-gray-400 text-black'}`}>Back to Games</button>
+                </div>
+                <div className="space-y-4">
+                    <div className="grid md:grid-cols-3 gap-4">
+                        <div><label className={`block text-sm font-medium mb-1 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>HTML</label><textarea value={userGameCode.html} onChange={(e) => setUserGameCode(p => ({...p, html: e.target.value}))} className={`w-full h-48 p-2 font-mono text-sm rounded ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-black'} border`} placeholder=""></textarea></div>
+                        <div><label className={`block text-sm font-medium mb-1 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>CSS</label><textarea value={userGameCode.css} onChange={(e) => setUserGameCode(p => ({...p, css: e.target.value}))} className={`w-full h-48 p-2 font-mono text-sm rounded ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-black'} border`} placeholder="/* Styles */"></textarea></div>
+                        <div><label className={`block text-sm font-medium mb-1 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>JavaScript</label><textarea value={userGameCode.js} onChange={(e) => setUserGameCode(p => ({...p, js: e.target.value}))} className={`w-full h-48 p-2 font-mono text-sm rounded ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-black'} border`} placeholder="// Logic"></textarea></div>
+                    </div>
+                    <div className="flex space-x-3">
+                        <button onClick={handleRunCode} className={`py-2 px-4 rounded-lg shadow-md text-white ${theme === 'dark' ? 'bg-green-600 hover:bg-green-500' : 'bg-green-500 hover:bg-green-400'}`}>Run</button>
+                        <button onClick={() => setShowDeployConfirm(true)} className={`py-2 px-4 rounded-lg shadow-md text-white ${theme === 'dark' ? 'bg-blue-600 hover:bg-blue-500' : 'bg-blue-500 hover:bg-blue-400'}`}>Deploy</button>
+                    </div>
+                     <div className="mt-4"><h4 className={`text-lg font-semibold mb-2 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>Preview</h4><iframe title="Game Preview" srcDoc={previewSrcDoc} className={`w-full h-64 border rounded ${theme === 'dark' ? 'border-gray-600 bg-gray-700' : 'border-gray-300 bg-gray-100'}`} sandbox="allow-scripts allow-same-origin"></iframe></div>
+                </div>
+                <Modal isOpen={showDeployConfirm} onClose={() => setShowDeployConfirm(false)} title="Confirm Deployment" theme={theme}>
+                    <p className={`${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} mb-4`}>Deploy this game to be shared (conceptually)?</p>
+                    <div className="flex justify-end space-x-3">
+                        <button onClick={() => setShowDeployConfirm(false)} className={`py-2 px-4 rounded ${theme === 'dark' ? 'bg-gray-600 hover:bg-gray-500' : 'bg-gray-300 hover:bg-gray-400 text-black'}`}>Cancel</button>
+                        <button onClick={confirmDeployGame} className={`py-2 px-4 rounded text-white ${theme === 'dark' ? 'bg-blue-600 hover:bg-blue-500' : 'bg-blue-500 hover:bg-blue-400'}`}>Deploy</button>
+                    </div>
+                </Modal>
+            </div>
+        );
+    }
+    
+    const GameCard = ({game, onPlay}) => (
+        <div className={`p-6 rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'}`}>
+            <h3 className={`text-xl font-semibold mb-2 ${theme === 'dark' ? 'text-cyan-400' : 'text-cyan-600'}`}>{game.name}</h3>
+            {game.createdBy && <p className={`text-xs mb-1 ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>By: {game.createdBy.substring(0,8)}...</p>}
+            {game.createdAt && <p className={`text-xs mb-3 ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>Created: {new Date(game.createdAt.seconds * 1000).toLocaleDateString()}</p>}
+            <p className={`text-sm mb-4 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>{game.description}</p>
+            <button 
+                className={`w-full py-2 px-4 rounded-lg font-semibold transition-colors text-white shadow-md ${game.isPlaceholder ? (theme === 'dark' ? 'bg-gray-500' : 'bg-gray-400') + ' cursor-not-allowed' : (theme === 'dark' ? 'bg-teal-600 hover:bg-teal-500' : 'bg-teal-500 hover:bg-teal-400')}`}
+                onClick={() => !game.isPlaceholder && onPlay(game.id)}
+                disabled={game.isPlaceholder}
+            >
+                {game.isPlaceholder ? 'Coming Soon' : 'Play Now'}
+            </button>
+        </div>
+    );
+
+    return (
+        <div className="space-y-6">
+            <div className="flex justify-between items-center">
+                <h2 className={`text-3xl font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>Games</h2>
+                <button onClick={() => { setGameCreatorMode('code'); setShowPopup(false); }} className={`py-2 px-4 rounded-lg shadow-md text-white flex items-center space-x-2 ${theme === 'dark' ? 'bg-purple-600 hover:bg-purple-500' : 'bg-purple-500 hover:bg-purple-400'}`}>
+                    <Edit3 size={18}/> <span>Create Game</span>
+                </button>
+            </div>
+            <p className={`${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Play built-in games or user creations.</p>
+            
+            <h3 className={`text-2xl font-semibold mt-6 mb-3 ${theme === 'dark' ? 'text-cyan-300' : 'text-cyan-700'}`}>Featured Games</h3>
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {coreGames.map(game => <GameCard key={game.id} game={game} onPlay={onPlayGame} />)}
+                {placeholderGames.map(game => <GameCard key={game.id} game={game} onPlay={onPlayGame} />)}
+            </div>
+
+            <h3 className={`text-2xl font-semibold mt-8 mb-3 ${theme === 'dark' ? 'text-cyan-300' : 'text-cyan-700'}`}>User-Created Games</h3>
+            {isLoadingGames && <LoadingSpinner />}
+            {!isLoadingGames && deployedGames.length === 0 && <p className={`${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>No user-created games yet.</p>}
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {deployedGames.map(game => (
+                     <div key={game.id} className={`p-6 rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'}`}>
+                        <h3 className={`text-xl font-semibold mb-2 ${theme === 'dark' ? 'text-cyan-400' : 'text-cyan-600'}`}>{game.name || "User Game"}</h3>
+                        <p className={`text-xs mb-1 ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>By: {game.createdBy ? game.createdBy.substring(0,8)+'...' : 'Anon'}</p>
+                        <p className={`text-xs mb-3 ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>Created: {game.createdAt ? new Date(game.createdAt.seconds * 1000).toLocaleDateString() : 'N/A'}</p>
+                        <button className={`w-full py-2 px-4 rounded-lg font-semibold transition-colors text-white shadow-md ${theme === 'dark' ? 'bg-violet-600 hover:bg-violet-500' : 'bg-violet-500 hover:bg-violet-400'}`}
+                                onClick={() => {
+                                    const gameWindow = window.open("", "_blank", "width=800,height=600");
+                                    if(gameWindow) {
+                                        gameWindow.document.write(`<html><head><style>${game.css || ''}</style></head><body>${game.html || ''}<script>${game.js || ''}</script></body></html>`);
+                                        gameWindow.document.close();
+                                    } else { alert("Could not open game window. Enable popups."); }
+                                }}> Play User Game
+                        </button>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+const SettingsPage = ({ currentTheme, onToggleTheme, onDeleteAllData, userId }) => {
+    const cardStyle = `p-6 rounded-xl shadow-lg ${currentTheme === 'dark' ? 'bg-gray-800' : 'bg-white'}`;
+    const titleStyle = `text-xl font-semibold mb-3 ${currentTheme === 'dark' ? 'text-cyan-400' : 'text-cyan-600'}`;
+    const buttonStyle = `py-2 px-4 rounded-lg font-semibold transition-colors shadow-md`;
+    const textStyle = `${currentTheme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`;
+    const subTextStyle = `${currentTheme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`;
+    const warningTextStyle = `${currentTheme === 'dark' ? 'text-red-400' : 'text-red-600'}`;
+
+    return (
+        <div className="space-y-8 max-w-2xl mx-auto">
+            <h2 className={`text-3xl font-bold mb-6 ${currentTheme === 'dark' ? 'text-white' : 'text-gray-800'}`}>Settings</h2>
+            <div className={cardStyle}>
+                <h3 className={titleStyle}>Appearance</h3>
+                <div className="flex items-center justify-between">
+                    <p className={textStyle}>Theme: <span className="font-semibold">{currentTheme === 'dark' ? 'Dark' : 'Light'}</span></p>
+                    <button onClick={onToggleTheme} className={`${buttonStyle} ${currentTheme === 'dark' ? 'bg-yellow-500 hover:bg-yellow-400 text-black' : 'bg-indigo-600 hover:bg-indigo-500 text-white'} flex items-center space-x-2`}>
+                        {currentTheme === 'dark' ? <Sun size={20}/> : <Moon size={20} />} <span>Switch to {currentTheme === 'dark' ? 'Light' : 'Dark'}</span>
+                    </button>
+                </div>
+            </div>
+            <div className={cardStyle}>
+                <h3 className={titleStyle}>Profile</h3>
+                <p className={`${subTextStyle} mb-1`}>User ID:</p>
+                <p className={`font-mono text-xs p-2 rounded ${currentTheme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'} break-all`}>{userId || 'Loading...'}</p>
+                <p className={`${subTextStyle} mt-3`}>Profile customization coming soon.</p>
+            </div>
+            <div className={cardStyle}>
+                <h3 className={titleStyle}>Data Management</h3>
+                <p className={`${textStyle} mb-4`}>Manage your stored test reports and settings.</p>
+                <button onClick={onDeleteAllData} className={`${buttonStyle} bg-red-600 hover:bg-red-500 text-white flex items-center space-x-2`}>
+                    <Trash2 size={20}/> <span>Delete All My Data</span>
+                </button>
+                <p className={`text-xs mt-2 ${warningTextStyle}`}>Warning: This is irreversible.</p>
+            </div>
+            <div className={cardStyle}>
+                <h3 className={titleStyle}>Cookie Management</h3>
+                <p className={subTextStyle}>Uses necessary cookies for functionality (Firebase auth). Manage in browser.</p>
+            </div>
+        </div>
+    );
+};
+
+const InfoPage = ({ theme }) => {
+    return (
+        <div className={`p-8 rounded-xl shadow-2xl max-w-3xl mx-auto ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'}`}>
+            <h2 className={`text-3xl font-bold mb-6 text-center ${theme === 'dark' ? 'text-cyan-400' : 'text-cyan-600'}`}>About Shadow Type Studio</h2>
+            <div className={`space-y-4 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} text-lg leading-relaxed`}>
+                <p>Hi! I'm HerobrineX, welcome to <strong className={`${theme === 'dark' ? 'text-cyan-300' : 'text-cyan-600'}`}>Shadow Type Studio</strong>!</p>
+                <p>Improve typing, test click speed, and have fun. New features coming!</p>
+                <h3 className={`text-xl font-semibold mt-6 mb-2 ${theme === 'dark' ? 'text-cyan-300' : 'text-cyan-600'}`}>Mission:</h3>
+                <p>A sleek, user-friendly platform for typing and reflex enhancement.</p>
+                <h3 className={`text-xl font-semibold mt-6 mb-2 ${theme === 'dark' ? 'text-cyan-300' : 'text-cyan-600'}`}>Contact:</h3>
+                <ul className="list-disc list-inside ml-4 space-y-1">
+                    <li>Email: <a href="mailto:contact@shadowtypestudio.com" className={`${theme === 'dark' ? 'text-cyan-400 hover:text-cyan-300' : 'text-cyan-600 hover:text-cyan-500'} underline`}>contact@shadowtypestudio.com</a> (placeholder)</li>
+                    <li>Discord: <a href="#" onClick={(e) => {e.preventDefault(); alert("Discord link not available yet!");}} className={`${theme === 'dark' ? 'text-cyan-400 hover:text-cyan-300' : 'text-cyan-600 hover:text-cyan-500'} underline`}>Community</a> (placeholder)</li>
+                </ul>
+                <p className="mt-6 text-center text-sm">Happy typing!</p>
+            </div>
+        </div>
+    );
+};
+
+const LoadingSpinner = () => (
+    <div className="flex flex-col items-center justify-center h-full">
+        <div className={`animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-cyan-500`}></div>
+        <p className={`ml-4 text-xl mt-4`}>Loading...</p>
+    </div>
+);
+
+// --- Game Components ---
+const SpacebarFrenzyGame = ({ theme, onGameEnd }) => {
+    const GAME_DURATION = 60; // seconds
+    const [timeLeft, setTimeLeft] = useState(GAME_DURATION);
+    const [score, setScore] = useState(0);
+    const [isActive, setIsActive] = useState(false);
+    const [gameOver, setGameOver] = useState(false);
+
+    const progressBarWidth = useMemo(() => {
+        const pressesToFill = 200;
+        const pressProgress = Math.min(100, (score / pressesToFill) * 100);
+        return pressProgress;
+    }, [score]);
+
+    useEffect(() => {
+        if (!isActive || gameOver) return;
+        if (timeLeft <= 0) { setIsActive(false); setGameOver(true); return; }
+        const timerId = setInterval(() => setTimeLeft(prev => prev - 1), 1000);
+        return () => clearInterval(timerId);
+    }, [isActive, timeLeft, gameOver]);
+
+    useEffect(() => {
+        if (!isActive || gameOver) return;
+        const handleKeyDown = (e) => {
+            if (e.code === 'Space') { e.preventDefault(); setScore(s => s + 1); }
+        };
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+    }, [isActive, gameOver]);
+
+    const startGame = () => { setTimeLeft(GAME_DURATION); setScore(0); setIsActive(true); setGameOver(false); };
+
+    if (!isActive && !gameOver) {
+        return (
+            <div className="flex flex-col items-center justify-center h-full text-center p-4">
+                <Zap size={64} className={`mb-6 ${theme === 'dark' ? 'text-yellow-400' : 'text-yellow-500'}`} />
+                <h3 className={`text-3xl font-bold mb-4 ${theme === 'dark' ? 'text-cyan-300' : 'text-cyan-600'}`}>Spacebar Frenzy!</h3>
+                <p className={`text-lg mb-8 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>Mash spacebar for {GAME_DURATION}s!</p>
+                <button onClick={startGame} className={`py-3 px-8 rounded-lg text-xl font-semibold shadow-lg transition-colors ${theme === 'dark' ? 'bg-green-500 hover:bg-green-400 text-white' : 'bg-green-600 hover:bg-green-500 text-white'}`}>Start</button>
+            </div>
+        );
+    }
+    
+    if (gameOver) {
+        return (
+            <div className="flex flex-col items-center justify-center h-full text-center p-4">
+                <h3 className={`text-4xl font-bold mb-6 ${theme === 'dark' ? 'text-red-400' : 'text-red-600'}`}>Game Over!</h3>
+                <p className={`text-2xl mb-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>Score: <span className={`font-bold ${theme === 'dark' ? 'text-cyan-400' : 'text-cyan-600'}`}>{score}</span></p>
+                <p className={`text-lg mb-8 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>{score} presses in {GAME_DURATION}s.</p>
+                <div className="flex space-x-4">
+                    <button onClick={startGame} className={`py-2 px-6 rounded-lg font-semibold shadow-md transition-colors ${theme === 'dark' ? 'bg-blue-500 hover:bg-blue-400 text-white' : 'bg-blue-600 hover:bg-blue-500 text-white'}`}>Play Again</button>
+                    <button onClick={onGameEnd} className={`py-2 px-6 rounded-lg font-semibold shadow-md transition-colors ${theme === 'dark' ? 'bg-gray-600 hover:bg-gray-500 text-white' : 'bg-gray-300 hover:bg-gray-400 text-black'}`}>Exit</button>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="flex flex-col items-center justify-center h-full p-4 text-center">
+            <p className={`text-xl mb-4 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>Mash spacebar!</p>
+            <div className={`text-5xl font-bold my-6 ${theme === 'dark' ? 'text-cyan-400' : 'text-cyan-600'}`}>{score}</div>
+            <div className={`w-full h-8 rounded-full mb-6 ${theme === 'dark' ? 'bg-gray-700' : 'bg-gray-300'} overflow-hidden shadow-inner`}>
+                <div className="h-full bg-gradient-to-r from-purple-500 via-pink-500 to-red-500 rounded-full transition-all duration-100 ease-linear" style={{ width: `${progressBarWidth}%` }}></div>
+            </div>
+            <div className={`text-3xl font-semibold ${theme === 'dark' ? 'text-yellow-400' : 'text-yellow-600'}`}>Time: {timeLeft}s</div>
+        </div>
+    );
+};
+
+const ClickNinjaGame = ({ theme, onGameEnd }) => {
+    const GAME_DURATION = 30; 
+    const MAX_EMOJIS = 10;
+    const EMOJI_LIST = ['🎯', '💣', '⭐', '👻', '👽', '👾', '🚀', '💰', '💎', '✨']; 
+
+    const [timeLeft, setTimeLeft] = useState(GAME_DURATION);
+    const [score, setScore] = useState(0);
+    const [isActive, setIsActive] = useState(false);
+    const [gameOver, setGameOver] = useState(false);
+    const [emojis, setEmojis] = useState([]);
+    const gameAreaRef = React.useRef(null);
+
+    const getRandomEmoji = () => EMOJI_LIST[Math.floor(Math.random() * EMOJI_LIST.length)];
+
+    const spawnEmoji = useCallback(() => {
+        if (!gameAreaRef.current || emojis.length >= MAX_EMOJIS) return;
+        const areaRect = gameAreaRef.current.getBoundingClientRect();
+        const newEmoji = {
+            id: Date.now() + Math.random(), char: getRandomEmoji(),
+            x: Math.random() * (areaRect.width - 40), y: Math.random() * (areaRect.height - 40),
+            visible: true, animationDuration: Math.random() * 3 + 2, animationDelay: Math.random() * 0.5,
+        };
+        setEmojis(prev => [...prev, newEmoji]);
+    }, [emojis.length]);
+
+    useEffect(() => {
+        if (!isActive || gameOver) return;
+        if (timeLeft <= 0) { setIsActive(false); setGameOver(true); return; }
+        const timerId = setInterval(() => setTimeLeft(prev => prev - 1), 1000);
+        return () => clearInterval(timerId);
+    }, [isActive, timeLeft, gameOver]);
+
+    useEffect(() => {
+        if (!isActive || gameOver) return;
+        const spawnInterval = setInterval(spawnEmoji, 1000); 
+        return () => clearInterval(spawnInterval);
+    }, [isActive, gameOver, spawnEmoji]);
+
+    const handleEmojiClick = (e, emojiId) => {
+        e.preventDefault(); 
+        if (!isActive || gameOver) return;
+        const clickedEmoji = emojis.find(em => em.id === emojiId);
+        if (!clickedEmoji || !clickedEmoji.visible) return;
+        setEmojis(prevEmojis => prevEmojis.map(em => em.id === emojiId ? {...em, visible: false} : em));
+        if (clickedEmoji.char === '💣') setScore(s => Math.max(0, s - 5)); else setScore(s => s + 1);
+    };
+    
+    const startGame = () => {
+        setTimeLeft(GAME_DURATION); setScore(0); setEmojis([]); setIsActive(true); setGameOver(false);
+        setTimeout(spawnEmoji, 100); setTimeout(spawnEmoji, 300);
+    };
+
+    if (!isActive && !gameOver) {
+        return (
+            <div className="flex flex-col items-center justify-center h-full text-center p-4">
+                <Target size={64} className={`mb-6 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`} />
+                <h3 className={`text-3xl font-bold mb-4 ${theme === 'dark' ? 'text-cyan-300' : 'text-cyan-600'}`}>Click Ninja!</h3>
+                <p className={`text-lg mb-2 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>Right-click targets! Avoid 💣.</p>
+                <p className={`text-sm mb-8 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Duration: {GAME_DURATION}s.</p>
+                <button onClick={startGame} className={`py-3 px-8 rounded-lg text-xl font-semibold shadow-lg transition-colors ${theme === 'dark' ? 'bg-green-500 hover:bg-green-400 text-white' : 'bg-green-600 hover:bg-green-500 text-white'}`}>Start</button>
+            </div>
+        );
+    }
+
+    if (gameOver) {
+        return (
+            <div className="flex flex-col items-center justify-center h-full text-center p-4">
+                <h3 className={`text-4xl font-bold mb-6 ${theme === 'dark' ? 'text-red-400' : 'text-red-600'}`}>Game Over!</h3>
+                <p className={`text-2xl mb-8 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>Score: <span className={`font-bold ${theme === 'dark' ? 'text-cyan-400' : 'text-cyan-600'}`}>{score}</span></p>
+                <div className="flex space-x-4">
+                    <button onClick={startGame} className={`py-2 px-6 rounded-lg font-semibold shadow-md transition-colors ${theme === 'dark' ? 'bg-blue-500 hover:bg-blue-400 text-white' : 'bg-blue-600 hover:bg-blue-500 text-white'}`}>Play Again</button>
+                    <button onClick={onGameEnd} className={`py-2 px-6 rounded-lg font-semibold shadow-md transition-colors ${theme === 'dark' ? 'bg-gray-600 hover:bg-gray-500 text-white' : 'bg-gray-300 hover:bg-gray-400 text-black'}`}>Exit</button>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="flex flex-col h-full">
+            <div className={`flex justify-between items-center p-4 border-b ${theme === 'dark' ? 'border-gray-700' : 'border-gray-300'}`}>
+                <div className={`text-2xl font-bold ${theme === 'dark' ? 'text-cyan-400' : 'text-cyan-600'}`}>Score: {score}</div>
+                <div className={`text-2xl font-semibold ${theme === 'dark' ? 'text-yellow-400' : 'text-yellow-600'}`}>Time: {timeLeft}s</div>
+            </div>
+            <div ref={gameAreaRef} className="flex-grow relative overflow-hidden cursor-crosshair" onContextMenu={(e) => e.preventDefault()}>
+                {emojis.filter(em => em.visible).map(emoji => (
+                    <span key={emoji.id} onContextMenu={(e) => handleEmojiClick(e, emoji.id)}
+                        className="absolute text-3xl md:text-4xl cursor-pointer select-none transition-opacity duration-300"
+                        style={{ left: `${emoji.x}px`, top: `${emoji.y}px`, opacity: emoji.visible ? 1 : 0, pointerEvents: emoji.visible ? 'auto' : 'none', animation: `float ${emoji.animationDuration}s infinite alternate ease-in-out ${emoji.animationDelay}s, fadeIn 0.3s ease-out`}}>
+                        {emoji.char}
+                    </span>
+                ))}
+            </div>
+            <style jsx global>{`
+                @keyframes float { 0% { transform: translateY(0px) translateX(0px) rotate(0deg); } 25% { transform: translateY(-10px) translateX(5px) rotate(5deg); } 50% { transform: translateY(5px) translateX(-10px) rotate(-5deg); } 75% { transform: translateY(-5px) translateX(10px) rotate(3deg); } 100% { transform: translateY(0px) translateX(0px) rotate(0deg); } }
+                @keyframes fadeIn { from { opacity: 0; transform: scale(0.5); } to { opacity: 1; transform: scale(1); } }
+            `}</style>
+        </div>
+    );
+};
+
+
+export default App;
+
